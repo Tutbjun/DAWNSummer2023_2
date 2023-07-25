@@ -3,7 +3,7 @@ FILTERS_RES               FILTER.RES.latest
 FILTER_FORMAT             1.0
 SMOOTH_FILTERS            n
 SMOOTH_SIGMA              100.0
-TEMPLATES_FILE            templates/sfhz/corr_sfhz_13.param
+TEMPLATES_FILE            templates/fsps_45k.param
 TEMPLATE_COMBOS           a
 NMF_TOLERANCE             0.0001
 WAVELENGTH_FILE           templates/uvista_nmf/lambda.def
@@ -20,14 +20,14 @@ CAT_HAS_EXTCORR           y
 DUMP_TEMPLATE_CACHE       n
 USE_TEMPLATE_CACHE        n
 CACHE_FILE                photz.tempfilt
-CATALOG_FILE              ../data/gds_jades_eazy.fits
+CATALOG_FILE              ./data/gds_jades_eazy.fits
 CATALOG_FORMAT            ascii.commented_header
 MAGNITUDES                n
 NOT_OBS_THRESHOLD         -90.0
 N_MIN_COLORS              5.0
 ARRAY_NBITS               32.0
 OUTPUT_DIRECTORY          OUTPUT
-MAIN_OUTPUT_FILE          eazy-output/corr_sfhz_13/gds_jades_eazy
+MAIN_OUTPUT_FILE          eazy-output/fsps_45k_1690215568/gds_jades_eazy
 PRINT_ERRORS              y
 CHI2_SCALE                1.0
 VERBOSE_LOG               y
