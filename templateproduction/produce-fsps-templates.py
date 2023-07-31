@@ -66,7 +66,7 @@ if THREADCNT >= 1:
     sps = sps0
     FSPS_PATH = os.getenv('SPS0_HOME')
 
-THREADCNT = 2#threadcap
+#THREADCNT = 1#threadcap
 
 from astropy.cosmology import WMAP9 as cosmology
 from collections import OrderedDict
@@ -224,7 +224,7 @@ for t,sp in enumerate(SP):
     lum_filters = [153, 155, 161, 163, 270, 274]
     lum_names = ['u','v','j','k','1400','2800']
 
-    res = eazy.filters.FilterFile('FILTER.RES.latest')
+    res = eazy.filters.FilterFile(os.getenv('EAZYCODE')+'/inputs/FILTER.RES.latest')
     uvj_res = [res[153],res[155],res[161]]
 
     magdis = grizli.utils.read_catalog('templates/magdis/README.txt')
@@ -364,6 +364,7 @@ def worker(vars, threadID=None):
     if threadID == None: threadID = int(mp.current_process().name.split("-")[-1])-1
     i, props = vars
     tage_, Av, hb_boost, extra_uv, beta, dust_index, sfh_index = props
+    #TODO: make sure all parameters are in use
     print()
     print("working on template ", i, "with variables ", props)
 
@@ -498,6 +499,13 @@ def worker(vars, threadID=None):
         templ.meta['tage'] = sp.params['tage']
         templ.meta['metallicity'] = sp.params['metallicity']
 
+        # Identifying attributes
+        templ.meta['hb_boost'] = hb_boost
+        templ.meta['extra_uv'] = extra_uv
+        templ.meta['beta'] = beta
+        templ.meta['dust_index'] = dust_index
+        templ.meta['sfh_index'] = sfh_index
+
         flux_grid.append(_x.flux[0,:])
         cont_grid.append(sp.templ_cont.flux[0,:])
         unred_grid.append(sp.templ_unred.flux[0,:])
@@ -511,10 +519,10 @@ def worker(vars, threadID=None):
     templates[i] = templ
 
 #!multithreading region
-#pool = mp.Pool(processes=THREADCNT)
-#pool.map(worker, workinVars)
-for i, vars in workinVars[:1]:
-    worker((i, vars), threadID=0)
+pool = mp.Pool(processes=THREADCNT)
+pool.map(worker, workinVars)
+"""for i, vars in workinVars:
+    worker((i, vars), threadID=0)"""
 #!end multithreading region
 
 print("\n=== The templates were produced: ===")
@@ -596,16 +604,31 @@ templ_root = f"fsps_{TEMP}k"
 param_file = f"{output_dir}/{templ_root}_alpha.param"
 
 print("\n=== Writing params file ===========")
+finishedFiles = 0
+for i, templ in enumerate(templates):#!scuffed programming for limmited runtime, pls fix
+    try:
+        len(templ)
+    except:
+        finishedFiles += 1
 fp = open(param_file, 'w')
-for i, templ in enumerate(templates):        
+for i, templ in enumerate(templates[:finishedFiles]):
     tab = templ.to_table()
+    tab_verbose = templ.to_table()
     tab['flux'] = tab['flux'].astype(np.float32)
+    def foldOutTuple(tab_in, tab_out, key:str):
+        inTable = np.asarray(tab_in[key]).T
+        for i in range(len(tab_in[key][0])):
+            tab_out[key + str(i)] = inTable[i]
+        return tab_out
+    tab_verbose = foldOutTuple(tab,tab_verbose,'flux')
     
     if hasattr(templ, 'continuum'):
         tab['continuum'] = templ.continuum.T.astype(np.float32)
+        tab_verbose = foldOutTuple(tab,tab_verbose,'continuum')
     
     if hasattr(templ, 'unred'):
         tab['dered'] = templ.unred.T.astype(np.float32)
+        tab_verbose = foldOutTuple(tab,tab_verbose,'dered')
     
     templ.ageV = tage_
     
@@ -616,17 +639,19 @@ for i, templ in enumerate(templates):
         name = f"fsps_{identifier}_bin1"
     templ.name = name
     tab.meta['ageV'] = templ.ageV
+    tab_verbose.meta['ageV'] = templ.ageV
     line = f'{i+1} templates/{output_dir}/{name}.fits 1.0 0.0 1.0'
     fp.write(line+'\n')
     tab.write(f'{output_dir}/{name}.fits', overwrite=True)
+    tab_verbose.write(f'{output_dir}/{name}_verbose.fits', overwrite=True)
     print(f" {output_dir}/{name}.fits")
 fp.close()
 
 # Metadata
-max_NZ = np.max([templ.NZ for templ in templates])
+max_NZ = np.max([templ.NZ for templ in templates[:finishedFiles]])
 cols = ['file']
 rows = []
-for j, templ in enumerate(templates):
+for j, templ in enumerate(templates[:finishedFiles]):
     row = []
     row.append(templ.name)
     for k in full_meta_params:
