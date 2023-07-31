@@ -5,14 +5,76 @@ import os, sys, copy
 import astropy.units as u
 import matplotlib.pyplot as plt
 import numpy as np
-import fsps, eazy.sps, grizli.utils
+import grizli.utils
+import eazy
+import multiprocessing as mp
+
+#crazy hack to get fsps to be multithreaded
+THREADCNT = 0
+try:
+    import fsps0
+    import eazy.sps0 as sps0
+    THREADCNT += 1
+    try:
+        import fsps1
+        import eazy.sps1 as sps1
+        THREADCNT += 1
+        try:
+            import fsps2
+            import eazy.sps2 as sps2
+            THREADCNT += 1
+            try:
+                import fsps3
+                import eazy.sps3 as sps3
+                THREADCNT += 1
+                try:
+                    import fsps4
+                    import eazy.sps4 as sps4
+                    THREADCNT += 1
+                    try:
+                        import fsps5
+                        import eazy.sps5 as sps5
+                        THREADCNT += 1
+                        try:
+                            import fsps6
+                            import eazy.sps6 as sps6
+                            THREADCNT += 1
+                            try:
+                                import fsps7
+                                import eazy.sps7 as sps7
+                                THREADCNT += 1
+                            except:
+                                pass
+                        except:
+                            pass
+                    except:
+                        pass
+                except:
+                    pass
+            except:
+                pass
+        except:
+            pass
+    except:
+        pass
+except:
+    import fsps
+    import eazy.sps as sps
+    FSPS_PATH = os.getenv('SPS_HOME')
+if THREADCNT >= 1:
+    fsps = fsps0
+    sps = sps0
+    FSPS_PATH = os.getenv('SPS0_HOME')
+
+THREADCNT = 2#threadcap
 
 from astropy.cosmology import WMAP9 as cosmology
 from collections import OrderedDict
 from eazy.templates import read_templates_file
 from scipy.interpolate import CubicSpline
 
-TEMP = sys.argv[-1] # IMF temperature [K]
+#TEMP = sys.argv[-1] # IMF temperature [K]
+TEMP = 45
 
 #=========================================
 # check eazy and fsps setup
@@ -124,7 +186,7 @@ def get_param_dict(d):
 #=========================================
 ### Set params for FSPS (based on COSMOS2020 templates)
 
-templates_c2020 = read_templates_file('templates/spline_templates_v3/c2020_spline.param')
+templates_c2020 = read_templates_file('templates/spline_templates_v3/c2020_spline.param')#!only 17 long, but should match the gridlength
 #templates_c2020 = read_templates_file('templates/templates-c2020/chabrier/fsps.param')
 c2020_meta = templates_c2020[0].meta
 #diff = compare_meta(sp, templates_c2020[idx_temp], print_all=True)
@@ -136,63 +198,73 @@ kws_c2020['pagb'] = 0.0 # reset some params
 #=========================================
 # Initialize FSPS (with eazy.sps)
 
-sp = eazy.sps.ExtendedFsps(**kws_c2020)
-sp.set_fir_template()
-sp.set_dust(dust_obj_type='KC13')
-sp.params['dust_index'] = 0.0
-#sp.set_dust(dust_obj_type='R15')
-#sp.set_dust(dust_obj_type='C00')
-#sp.set_dust(dust_obj_type='WG00x')
+SP = []
+for t in range(THREADCNT):
+    module = eval(f'sps{t}')
+    SP.append(module.ExtendedFsps(**kws_c2020))
+    print("Loaded FSPS module", t)
+if THREADCNT == 0:
+    SP.append(sps.ExtendedFsps(**kws_c2020))
+for t,sp in enumerate(SP):
+    print(f"Setting FSPS{t} parameters...")
+    FSPS_PATH = eval(f'os.getenv("SPS{t}_HOME")')
+    sp.set_fir_template()
+    sp.set_dust(dust_obj_type='KC13')
+    sp.params['dust_index'] = 0.0
+    #sp.set_dust(dust_obj_type='R15')
+    #sp.set_dust(dust_obj_type='C00')
+    #sp.set_dust(dust_obj_type='WG00x')
 
-# IR extrapolation
-sp.dust_obj.extra_params['beta'] = -3.2
-sp.dust_obj.extra_params['extra_uv'] = -0.4
-x_dust_index = [0, 0.5, 1, 2, 3]
-y_dust_index = [-0.1, -0.1, 0.1, 0.2, 0.4]
+    # IR extrapolation
+    sp.dust_obj.extra_params['beta'] = -3.2
+    sp.dust_obj.extra_params['extra_uv'] = -0.4
+    x_dust_index = [0, 0.5, 1, 2, 3]
+    y_dust_index = [-0.1, -0.1, 0.1, 0.2, 0.4]
 
-lum_filters = [153, 155, 161, 163, 270, 274]
-lum_names = ['u','v','j','k','1400','2800']
+    lum_filters = [153, 155, 161, 163, 270, 274]
+    lum_names = ['u','v','j','k','1400','2800']
 
-res = eazy.filters.FilterFile('FILTER.RES.latest')
-uvj_res = [res[153],res[155],res[161]]
+    res = eazy.filters.FilterFile('FILTER.RES.latest')
+    uvj_res = [res[153],res[155],res[161]]
 
-magdis = grizli.utils.read_catalog('templates/magdis/README.txt')
-bands = ['u','v','2mass_j', 'i1500', 'i2800']
-meta_pars = ['stellar_mass', 'formed_mass', 'sfr100','energy_absorbed', 
-             'rline [OII]3726', 'rline [OII]3729', 'rline Hbeta4861', 
-             'rline [OIII]4960', 'rline [OIII]5007', 'rline Halpha6563',
-             'rline [NII]6549', 'rline [NII]6585', 
-             'rline Pabeta12819', 'rline Paalpha18752', 'line [CII]157.7m', 
-             'dust_index','Av', 'gas_logu', 'logzsol', 'imf_type',
-             'zred']
+    magdis = grizli.utils.read_catalog('templates/magdis/README.txt')
+    bands = ['u','v','2mass_j', 'i1500', 'i2800']
+    meta_pars = ['stellar_mass', 'formed_mass', 'sfr100','energy_absorbed', 
+                'rline [OII]3726', 'rline [OII]3729', 'rline Hbeta4861', 
+                'rline [OIII]4960', 'rline [OIII]5007', 'rline Halpha6563',
+                'rline [NII]6549', 'rline [NII]6585', 
+                'rline Pabeta12819', 'rline Paalpha18752', 'line [CII]157.7m', 
+                'dust_index','Av', 'gas_logu', 'logzsol', 'imf_type',
+                'zred']
 
-centers = list(np.logspace(np.log10(0.031), 1, 6)) # VR adjusted to match C2020
+    centers = list(np.logspace(np.log10(0.031), 1, 6)) # VR adjusted to match C2020
 
-step = 0.001
-ages = (10**np.arange(np.log10(3.e-4), np.log10(14.127) + step, step))
-NZ = 14 # number of redshift bins
+    step = 0.001
+    ages = (10**np.arange(np.log10(3.e-4), np.log10(14.127) + step, step))
+    NZ = 14 # number of redshift bins
 
-# load SFH from a file
-sfh = np.loadtxt('sfh_alpha_c2020.txt')
-N = sfh.shape[0]
+    # load SFH from a file
+    #sfh = np.loadtxt(os.path.join(os.path.dirname(__file__), 'sfh_alpha_c2020.txt'))
+    sfh = np.loadtxt(os.path.join(os.path.dirname(__file__), 'sfh_custom.txt'))
+    #N = sfh.shape[0]
 
-#=========================================
-# set the IMF.dat file
-# place correct imf.dat file in FSPS location
-imf_file = f"imf{TEMP}.dat"
-FSPS_PATH = os.getenv('SPS_HOME')
-FSPS_PATH = os.path.join(FSPS_PATH, "data")
-IMF_CUSTOM_PATH = f"{FSPS_PATH}/fsps_imfs/{imf_file}"
-IMF_FSPS_PATH = f"{FSPS_PATH}/imf.dat"
+    #=========================================
+    # set the IMF.dat file
+    # place correct imf.dat file in FSPS location
+    imf_file = f"imf{TEMP}.dat"
+    #FSPS_PATH = os.getenv('SPS_HOME')
+    FSPS_PATH = os.path.join(FSPS_PATH, "data")
+    IMF_CUSTOM_PATH = f"{FSPS_PATH}/fsps_imfs/{imf_file}"
+    IMF_FSPS_PATH = f"{FSPS_PATH}/imf.dat"
 
-print("=== IMF ===========================")
-print(f" Setting IMF temperature to T={TEMP} K")
-print(f"  {IMF_CUSTOM_PATH.split('/')[-1]} ---> {IMF_FSPS_PATH.split('/')[-1]}\n")
-os.system(f'cp {IMF_CUSTOM_PATH} {IMF_FSPS_PATH}')
+    print("=== IMF ===========================")
+    print(f" Setting IMF temperature to T={TEMP} K")
+    print(f"  {IMF_CUSTOM_PATH.split('/')[-1]} ---> {IMF_FSPS_PATH.split('/')[-1]}\n")
+    os.system(f'cp {IMF_CUSTOM_PATH} {IMF_FSPS_PATH}')
 
 # fsps kwargs
-kwargs = {'scale_lyman_series': 0.1, 'force_recompute': True, 
-          'oversample': 2.5, 'zmet': 1}
+kwargs = {'scale_lyman_series': 0.1, 'force_recompute': True, #!! lines scaling here!! fix balmer
+        'oversample': 2.5, 'zmet': 1}
 
 scale_lines = {'[OII]3726': 1., '[OII]3729': 1.}
 kwargs['scale_lines'] = scale_lines
@@ -239,49 +311,90 @@ delta_age_max = 0.01 # Maximum delta age relative to age of universe for SF
 #=========================================
 # set the stellar pop parameters for 
 # individual templates
-sp_props = np.array([[0.1, 0.005, 1.0, 0.0,  -3.2,  0.0],
-                     [0.1, 0.5,   1.0, 0.0,  -3.2,  0.0],
-                     [0.1, 0.005, 1.0, 0.0,  -3.2, -0.3],
-                     [0.1, 0.5,   1.0, 0.0,  -3.2,  0.0],
-                     [0.1, 1.0,   1.0, 0.0,  -3.2,  0.0],
-                     [0.1, 2.0,   1.0, 0.0,  -3.2,  0.0],
-                     [0.1, 3.0,   1.0, -0.3, -3.2,  0.0]])
+#                     Age,   Av,    Scale Em. Line Hb4861+OIII,  extra_uv?,  beta?, dust_index?
+"""sp_props = np.array([[0.1,   0.005, 1.0,                         0.0,        -3.2,  0.0],
+                     [0.1,   0.5,   1.0,                         0.0,        -3.2,  0.0],
+                     [0.1,   0.005, 1.0,                         0.0,        -3.2,  -0.3],
+                     [0.1,   0.5,   1.0,                         0.0,        -3.2,  0.0],
+                     [0.1,   1.0,   1.0,                         0.0,        -3.2,  0.0],
+                     [0.1,   2.0,   1.0,                         0.0,        -3.2,  0.0],
+                     [0.1,   3.0,   1.0,                         -0.3,       -3.2,  0.0]])"""
+#! new set
+"""sp_props = np.array([[0.01,   0.005, 0.5,                         0.0,        -3.2,  0.0],#young
+                     [0.01,   0.5,   0.5,                         0.0,        -3.2,  0.0],#young
+                     [0.01,   3,   0.5,                         0.0,        -3.2,  0.0],#dusty, young
+                     [0.01,   0.005, 0.1,                         0.0,        -3.2,  0.0],#low em. line, young
+                     [0.1,   0.005, 0.5,                         0.0,        -3.2,  -0.3],
+                     [0.1,   0.5,   0.5,                         0.0,        -3.2,  0.0],
+                     [0.1,   3,   0.5,                         0.0,        -3.2,  0.0],#dusty
+                     [0.1,   0.005, 0.1,                         0.0,        -3.2,  0.0],#low em. line
+                     [0.5,   0.005,   0.5,                         0.0,        -3.2,  0.0],
+                     [0.5,   0.5,   0.5,                         0.0,        -3.2,  0.0],
+                     [0.5,   3,   0.5,                         -0.3,       -3.2,  0.0],#dusty
+                     [0.5,   0.005, 0.1,                         0.0,        -3.2,  0.0],#low em. line
+                     ])"""
+parameterSpace = [
+    np.logspace(np.log10(0.01), np.log10(0.5), 3), # age
+    np.logspace(np.log10(0.005), np.log10(3), 3), # Av
+    np.logspace(np.log10(0.1), np.log10(0.5), 2), # Hb4861+OIII
+    [0,-0.3], # extra_uv
+    [-3.2], # beta
+    [0,-0.3], # dust_index
+    list(range(4))#index of SFH
+]#TODO: add Oxygen scaling and HII scaling
+#create grid of parameters
+sp_props = np.array(np.meshgrid(*parameterSpace)).T.reshape(-1,7)
 
 
 print("=== Template SP parameters ========")
-print("\t\t Age, \t Av, \t Scale Em. Line Hb4861+OIII,  extra_uv,  beta, dust_index")
-for i, (tage_, Av, hb_boost, extra_uv, beta, dust_index) in enumerate(sp_props):
-    print(f"template {i+1}: \t {tage_:.2f} \t{Av} \t\t{hb_boost} \t\t\t {extra_uv}\t  {beta} \t {dust_index}")
+print("\t\t Age, \t Av, \t Scale Em. Line Hb4861+OIII,  extra_uv,  beta, dust_index, sfh_index")
+for i, (tage_, Av, hb_boost, extra_uv, beta, dust_index, sfh_index) in enumerate(sp_props):
+    print(f"template {i+1}: \t {tage_:.3f} \t{Av:.3f} \t\t{hb_boost} \t\t\t {extra_uv}\t  {beta} \t {dust_index} \t {sfh_index}")
 print()
 
 #=========================================
 # produce SP with FSPS
 
 # loop over params sets for each template
-templates = []
-for i, props in enumerate(sp_props):
-    tage_, Av, hb_boost, extra_uv, beta, dust_index = props
-    sfh_cur = sfh[i]
-    t_c2020 = templates_c2020[i]
-    t_c2020.meta = dict_lower_keys(t_c2020.meta)
-    d = dict_lower_keys(t_c2020.meta)
+
+
+templates = [[] for e in sp_props]
+workinVars = list(enumerate(sp_props))
+def worker(vars, threadID=None):
+    if threadID == None: threadID = int(mp.current_process().name.split("-")[-1])-1
+    i, props = vars
+    tage_, Av, hb_boost, extra_uv, beta, dust_index, sfh_index = props
+    print()
+    print("working on template ", i, "with variables ", props)
+
+    sfh_index = int(sfh_index)
+    sfh_cur = sfh[sfh_index]
+    #t_c2020 = templates_c2020[i]
+    #t_c2020.meta = dict_lower_keys(t_c2020.meta)
+    #d = dict_lower_keys(t_c2020.meta)
+    d = dict_lower_keys(c2020_meta)
     try:
-        logz = np.array([d[f'logz{i}'] for i in range(NZ)])
-        logu = np.array([d[f'logu{i}'] for i in range(NZ)])
+        logz = np.array([d[f'logz{j}'] for j in range(NZ)])
+        logu = np.array([d[f'logu{j}'] for j in range(NZ)])
     except:
         logz = np.full((NZ,), 0.0)
         logu = np.full((NZ,), -2.75)
     
-    kws_c2020 = get_param_dict(t_c2020.meta)
-    sp = eazy.sps.ExtendedFsps(**kws_c2020)
+    #kws_c2020 = get_param_dict(t_c2020.meta)
+    module = eval(f'sps{threadID}')
+    sp = module.ExtendedFsps(**kws_c2020)#! if one wants to do fsps multithreaded, then this is the place...
     sp.set_fir_template()
     sp.set_dust(dust_obj_type='KC13')
     sp.dust_obj.extra_params['extra_uv'] = extra_uv
     sp.dust_obj.extra_params['beta'] = beta
     sp.params['dust_index'] = dust_index
-    sp.params['tau'] = t_c2020.meta['tau']
+    #!removed temporarily:
+    """sp.params['tau'] = t_c2020.meta['tau']#! whyyyyyyyy is sfh also 1?????!?!
     sp.params['pagb'] = t_c2020.meta['pagb']
-    sp.params['sfh'] = 1
+    sp.params['sfh'] = 1"""
+    #!added:
+    sp.params['sfh'] = 3
+    sp.set_tabular_sfh(ages, sfh_cur)
     
     sp.wg00lim = np.isfinite(sp.wavelengths)
     sp.get_full_spectrum(tage=0.2) # initialization run
@@ -307,7 +420,7 @@ for i, props in enumerate(sp_props):
                                  get_template=True, 
                                  set_all_templates=True, **kwargs)
 
-    templ.name = f'fsps_{TEMP}k_t{tage_}_Av{Av:.1f}'
+    templ.name = f'fsps_{TEMP}k_t{tage_}_Av{Av:.3f}'
 
     templ.meta['NZ'] = len(met_logZ_grid) # VR: muted
     flux_grid = []
@@ -395,7 +508,14 @@ for i, props in enumerate(sp_props):
     templ.continuum = np.array(cont_grid)
     templ.unred = np.array(unred_grid)
     templ.IS_ALPHA = False
-    templates.append(templ)
+    templates[i] = templ
+
+#!multithreading region
+#pool = mp.Pool(processes=THREADCNT)
+#pool.map(worker, workinVars)
+for i, vars in workinVars[:1]:
+    worker((i, vars), threadID=0)
+#!end multithreading region
 
 print("\n=== The templates were produced: ===")
 [print(f"  {i}. {t}") for i, t in enumerate(templates)]
@@ -406,7 +526,7 @@ print("\n=== The templates were produced: ===")
 # with C2020 templates
 
 
-fig, axes = plt.subplots(2 * len(templates), 1, 
+"""fig, axes = plt.subplots(2 * len(templates), 1, 
                          figsize=(8, 6*len(templates)), 
                          dpi=100, gridspec_kw={'hspace': 0.1})
 
@@ -459,13 +579,13 @@ for i, t in enumerate(templates):
     
     nzeros = (t.flux == 0.0).all(axis=0).sum()
     #print(f"{t.name}: \t {t.flux.shape},  zero fluxes (along axis=1): {nzeros}")
-plt.savefig(f'../../docs/figures-templates/{TEMP}k_alpha.png', dpi=100)
+plt.savefig(f'../../docs/figures-templates/{TEMP}k_alpha.png', dpi=100)"""
 
 
 #=========================================
 # save templates
 
-output_dir = f'templates-c2020/{TEMP}k'
+output_dir = f'templates-custom/{TEMP}k'
 #output_dir = f'test-templ/{TEMP}k'
 if os.path.exists(output_dir):
     pass
@@ -489,10 +609,11 @@ for i, templ in enumerate(templates):
     
     templ.ageV = tage_
     
+    identifier = f'{TEMP}k_t{templ.meta["tage"]}_Av{np.round(templ.meta["Av"], 2):.3f}_EmHIIOIII{np.round(templ.meta["hb_boost"], 2):.3f}_extrauv{np.round(templ.meta["extra_uv"], 2):.3f}_beta{templ.meta["beta"]:.3f}_dust{templ.meta["dust_index"]:.3f}_sfh{sfh_index}'
     if i < 2:
-        name = f"fsps_{TEMP}k_t{templ.meta['tage']}_Av{np.round(templ.meta['Av'], 2):.1f}_bin0"
+        name = f"fsps_{identifier}_bin0"
     else:
-        name = f"fsps_{TEMP}k_t{templ.meta['tage']}_Av{np.round(templ.meta['Av'], 2):.1f}_bin1"
+        name = f"fsps_{identifier}_bin1"
     templ.name = name
     tab.meta['ageV'] = templ.ageV
     line = f'{i+1} templates/{output_dir}/{name}.fits 1.0 0.0 1.0'
