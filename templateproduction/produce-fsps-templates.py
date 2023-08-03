@@ -361,12 +361,12 @@ print()
 templates = [[] for e in sp_props]
 workinVars = list(enumerate(sp_props))
 def worker(vars, threadID=None):
+    #global templates
     if threadID == None: threadID = int(mp.current_process().name.split("-")[-1])-1
     i, props = vars
     tage_, Av, hb_boost, extra_uv, beta, dust_index, sfh_index = props
     #TODO: make sure all parameters are in use
-    print()
-    print("working on template ", i, "with variables ", props)
+    print(f"\n === template {i} - thread {threadID} ===")
 
     sfh_index = int(sfh_index)
     sfh_cur = sfh[sfh_index]
@@ -383,7 +383,7 @@ def worker(vars, threadID=None):
     
     #kws_c2020 = get_param_dict(t_c2020.meta)
     module = eval(f'sps{threadID}')
-    sp = module.ExtendedFsps(**kws_c2020)#! if one wants to do fsps multithreaded, then this is the place...
+    sp = module.ExtendedFsps(**kws_c2020)
     sp.set_fir_template()
     sp.set_dust(dust_obj_type='KC13')
     sp.dust_obj.extra_params['extra_uv'] = extra_uv
@@ -421,7 +421,7 @@ def worker(vars, threadID=None):
                                  get_template=True, 
                                  set_all_templates=True, **kwargs)
 
-    templ.name = f'fsps_{TEMP}k_t{tage_}_Av{Av:.3f}'
+    templ.name = f'fsps_{TEMP}k_t{tage_:.3f}_Av{Av:.3f}'
 
     templ.meta['NZ'] = len(met_logZ_grid) # VR: muted
     flux_grid = []
@@ -432,7 +432,8 @@ def worker(vars, threadID=None):
         templ.meta_dict[k] = []
 
     # loop over redshifts
-    print(f"\n  === {i} - template {templ.name} ===")
+    print(f"\n  === {i} - template {templ.name} - thread {threadID} ===")
+    print("with variables ", props)
     for iz in range(templ.meta['NZ']):
         z_i = met_redshift_grid[iz]
         sp.params['zred'] = z_i
@@ -516,13 +517,14 @@ def worker(vars, threadID=None):
     templ.continuum = np.array(cont_grid)
     templ.unred = np.array(unred_grid)
     templ.IS_ALPHA = False
-    templates[i] = templ
+    #templates[i] = templ
+    #templates[i].append(templ)
+    return templ
 
 #!multithreading region
 pool = mp.Pool(processes=THREADCNT)
-pool.map(worker, workinVars)
-"""for i, vars in workinVars:
-    worker((i, vars), threadID=0)"""
+templates = pool.map(worker, workinVars)
+pool.close()
 #!end multithreading region
 
 print("\n=== The templates were produced: ===")
@@ -593,7 +595,7 @@ plt.savefig(f'../../docs/figures-templates/{TEMP}k_alpha.png', dpi=100)"""
 #=========================================
 # save templates
 
-output_dir = f'templates-custom/{TEMP}k'
+output_dir = f'templates-custom/{TEMP}k/raw'
 #output_dir = f'test-templ/{TEMP}k'
 if os.path.exists(output_dir):
     pass
@@ -604,14 +606,8 @@ templ_root = f"fsps_{TEMP}k"
 param_file = f"{output_dir}/{templ_root}_alpha.param"
 
 print("\n=== Writing params file ===========")
-finishedFiles = 0
-for i, templ in enumerate(templates):#!scuffed programming for limmited runtime, pls fix
-    try:
-        len(templ)
-    except:
-        finishedFiles += 1
 fp = open(param_file, 'w')
-for i, templ in enumerate(templates[:finishedFiles]):
+for i, templ in enumerate(templates):
     tab = templ.to_table()
     tab_verbose = templ.to_table()
     tab['flux'] = tab['flux'].astype(np.float32)
@@ -648,10 +644,10 @@ for i, templ in enumerate(templates[:finishedFiles]):
 fp.close()
 
 # Metadata
-max_NZ = np.max([templ.NZ for templ in templates[:finishedFiles]])
+max_NZ = np.max([templ.NZ for templ in templates])
 cols = ['file']
 rows = []
-for j, templ in enumerate(templates[:finishedFiles]):
+for j, templ in enumerate(templates):
     row = []
     row.append(templ.name)
     for k in full_meta_params:
