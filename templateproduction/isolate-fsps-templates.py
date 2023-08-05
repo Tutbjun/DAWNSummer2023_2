@@ -21,12 +21,18 @@ for temp in templates_in:
     spectras.append(flux)
 spectras = np.array(spectras)
 
+shutil.copy(os.path.join(pathin, 'fsps_45k_alpha.param.fits'), os.path.join(pathout, 'optimized_45k.param.fits'))
+metatab_in = Table.read(os.path.join(pathin, 'fsps_45k_alpha.param.fits'))
 for i in range(matrix.shape[0]):
     shutil.copy(os.path.join(pathin, templates_in[0]), os.path.join(pathout, f"optimizedTemplate_{i}.fits"))
     tab = Table.read(os.path.join(pathout, f"optimizedTemplate_{i}.fits"))
+    
     fluxes = tab["flux"].T
     continuums = tab["continuum"].T
     dereds = tab["dered"].T
+    metadict = {}
+    for key in metatab.keys()[1:]:
+        metadict[key] = metatab[key][0]#!not yes solved...
     for j in range(len(fluxes)):
         fluxes[j] = np.dot(matrix[i], spectras)
         continuums[j] = np.dot(matrix[i], spectras)
@@ -37,3 +43,9 @@ for i in range(matrix.shape[0]):
     fitFile[1].data["dered"] = dereds.T
     fitFile.writeto(os.path.join(pathout, f"optimizedTemplate_{i}.fits"), overwrite=True)
     print(f"Template {i} done")
+
+#gen param file
+with open("templates-custom/45k/optimized_45k.param", "w") as f:
+    for i in range(matrix.shape[0]):
+        f.write("templates-custom/45k/optimizedTemplate_"+str(i)+".fits\n")
+f.close()
