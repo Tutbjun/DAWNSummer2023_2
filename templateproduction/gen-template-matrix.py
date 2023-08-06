@@ -2,8 +2,21 @@
 import os
 from astropy.table import Table
 import numpy as np
+
+#export os variable
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+num_threads = 5
+os.environ["OMP_NUM_THREADS"] = str(num_threads)
+os.environ["TF_NUM_INTRAOP_THREADS"] = str(num_threads)
+os.environ["TF_NUM_INTEROP_THREADS"] = str(num_threads)
+
 import tensorflow as tf
 from datetime import datetime
+
+tf.config.threading.set_inter_op_parallelism_threads(num_threads)
+tf.config.threading.set_intra_op_parallelism_threads(num_threads)
+tf.config.set_soft_device_placement(True)
+
 path = "templates-custom/45k/raw"
 templates_in = [f for f in os.listdir(path) if "bin1.fits" in f or "bin0.fits" in f]
 spectras = []
@@ -12,6 +25,7 @@ for temp in templates_in:
     flux = tab["flux"].T[-1]
     spectras.append(flux)
 spectras = np.array(spectras)
+
 
 #set up matrix to opperate them together
 @tf.function
@@ -35,18 +49,10 @@ def orthogonalityMeassure(vector):
             arr = tf.tensor_scatter_nd_add(arr, [[i,j]], [innerProduct(vector[i], vector[j])**2 / (innerProduct(vector[i], vector[i]) * innerProduct(vector[j], vector[j]))])
     return tf.reduce_sum(arr)
 
-
-start = tf.constant(np.random.uniform(0,1, size=(13, spectras.shape[0])), dtype=tf.float32)
-dummy = performMatrixOperation(start, spectras)
-
 #set up tensorflow to optimize matrix for othogonailitymeassure
-tf.debugging.set_log_device_placement(True)
 tfk = tf.keras
 tfkl = tf.keras.layers
 tf.config.run_functions_eagerly(True)
-
-#set up model
-model = tf.Variable(start, dtype=tf.float32)
 
 #set up loss function
 @tf.function
@@ -55,7 +61,7 @@ def loss_function(model, spectra):
     return orthogonalityMeassure(dummy)
 
 #set up optimizer
-optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.03)
 
 #set up training step
 @tf.function
@@ -80,23 +86,67 @@ def fixModel(model):
         model[i].assign(model[i] / tf.reduce_sum(model[i]))
     return model
 
-#set up training
-losses = []
-model = fixModel(model)
-for i in range(1000):
-    loss = train_step(model, spectras)
-    model = fixModel(model)
-    if i % 10 == 0:
-        print(loss.numpy())
-    if i % 30 == 0:
-        np.save("templates-custom/45k/optimized_matrix.npy", model.numpy())
-    print(".", end="")
-    losses.append(loss.numpy())
+losseses = []
+with tf.device("cpu"):
+    """def worker(j):
+        try:
+            model = tf.Variable(np.random.uniform(0,1, size=(13, spectras.shape[0])), dtype=tf.float32)
+            losses = []
+            model = fixModel(model)
+            for i in range(10000):
+                loss = train_step(model, spectras)
+                model = fixModel(model)
+                if i % 10 == 0:
+                    print(loss.numpy())
+                if i % 30 == 0:
+                    np.save("templates-custom/45k/optimized_matrix.npy", model.numpy())
+                print(".", end="")
+                losses.append(loss.numpy())
+                if len(losses) > 1000:
+                    if abs(loss-losses[-100]) < 0.000005:
+                        break
+            #save model
+            np.save(f"templates-custom/45k/optimized_matrix_score:{loss:.3f}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.npy", model.numpy())
+        except KeyboardInterrupt:
+            print("KeyboardInterrupt")
+            np.save(f"templates-custom/45k/optimized_matrix_score:{loss:.3f}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.npy", model.numpy())
+        return losses
 
-#save model
-np.save(f"templates-custom/45k/optimized_matrix_score:{loss:.3f}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.npy", model.numpy())
+
+    #set up training
+    losseses = [[] for i in range(100)]
+    #mulitprocessing
+    import multiprocessing as mp
+    pool = mp.Pool(mp.cpu_count())
+    losseses = pool.map(worker, [i for i in range(100)])
+    pool.close()"""
+    for i in range(100):
+        try:
+            model = tf.Variable(np.random.uniform(0,1, size=(13, spectras.shape[0])), dtype=tf.float32)
+            losses = []
+            model = fixModel(model)
+            for i in range(10000):
+                loss = train_step(model, spectras)
+                model = fixModel(model)
+                if i % 10 == 0:
+                    print(loss.numpy())
+                if i % 30 == 0:
+                    np.save("templates-custom/45k/optimized_matrix.npy", model.numpy())
+                print(".", end="")
+                losses.append(loss.numpy())
+                if len(losses) > 1000:
+                    if abs(loss-losses[-100]) < 0.000005:
+                        break
+            #save model
+            np.save(f"templates-custom/45k/optimized_matrix_score:{loss:.3f}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.npy", model.numpy())
+            losseses.append(losses)
+        except KeyboardInterrupt:
+            print("KeyboardInterrupt")
+            np.save(f"templates-custom/45k/optimized_matrix_score:{loss:.3f}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.npy", model.numpy())
+            losseses.append(losses)
+        
 
 #show losses
 import matplotlib.pyplot as plt
-plt.plot(losses)
+[plt.plot(losses) for losses in losseses]
 plt.show()

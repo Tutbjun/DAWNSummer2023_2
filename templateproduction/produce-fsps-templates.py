@@ -523,12 +523,13 @@ def worker(vars, threadID=None):
 
 #!multithreading region
 pool = mp.Pool(processes=THREADCNT)
-templates = pool.map(worker, workinVars)
+templates = pool.map(worker, workinVars, chunksize=1)
 pool.close()
 #!end multithreading region
 
 print("\n=== The templates were produced: ===")
 [print(f"  {i}. {t}") for i, t in enumerate(templates)]
+identifiers = []
 
 
 #=========================================
@@ -597,10 +598,13 @@ plt.savefig(f'../../docs/figures-templates/{TEMP}k_alpha.png', dpi=100)"""
 
 output_dir = f'templates-custom/{TEMP}k/raw'
 #output_dir = f'test-templ/{TEMP}k'
-if os.path.exists(output_dir):
-    pass
-else:
-    os.mkdir(output_dir)
+dirs = output_dir.split('/')
+for i in range(len(dirs)):
+    if i != len(dirs)-1: _dir = '/'.join(dirs[:i+1])
+    else: _dir = output_dir
+    if not os.path.exists(_dir):
+        os.mkdir(_dir)
+    
 
 templ_root = f"fsps_{TEMP}k"
 param_file = f"{output_dir}/{templ_root}_alpha.param"
@@ -608,6 +612,7 @@ param_file = f"{output_dir}/{templ_root}_alpha.param"
 print("\n=== Writing params file ===========")
 fp = open(param_file, 'w')
 for i, templ in enumerate(templates):
+    if not templ: continue
     tab = templ.to_table()
     tab_verbose = templ.to_table()
     tab['flux'] = tab['flux'].astype(np.float32)
@@ -628,7 +633,7 @@ for i, templ in enumerate(templates):
     
     templ.ageV = tage_
     
-    identifier = f'{TEMP}k_t{templ.meta["tage"]}_Av{np.round(templ.meta["Av"], 2):.3f}_EmHIIOIII{np.round(templ.meta["hb_boost"], 2):.3f}_extrauv{np.round(templ.meta["extra_uv"], 2):.3f}_beta{templ.meta["beta"]:.3f}_dust{templ.meta["dust_index"]:.3f}_sfh{sfh_index}'
+    identifier = f'{TEMP}k_index{i}_t{templ.meta["tage"]}_Av{np.round(templ.meta["Av"], 2):.3f}_EmHIIOIII{np.round(templ.meta["hb_boost"], 2):.3f}_extrauv{np.round(templ.meta["extra_uv"], 2):.3f}_beta{templ.meta["beta"]:.3f}_dust{templ.meta["dust_index"]:.3f}_sfh{sfh_index}'
     if i < 2:
         name = f"fsps_{identifier}_bin0"
     else:
@@ -644,10 +649,11 @@ for i, templ in enumerate(templates):
 fp.close()
 
 # Metadata
-max_NZ = np.max([templ.NZ for templ in templates])
+max_NZ = np.max([templ.NZ for templ in templates if templ])
 cols = ['file']
 rows = []
 for j, templ in enumerate(templates):
+    if not templ: continue
     row = []
     row.append(templ.name)
     for k in full_meta_params:
