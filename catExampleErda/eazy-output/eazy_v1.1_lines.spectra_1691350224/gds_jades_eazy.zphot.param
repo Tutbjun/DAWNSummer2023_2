@@ -27,7 +27,7 @@ NOT_OBS_THRESHOLD         -90.0
 N_MIN_COLORS              5.0
 ARRAY_NBITS               32.0
 OUTPUT_DIRECTORY          OUTPUT
-MAIN_OUTPUT_FILE          eazy-output/eazy_v1.1_lines.spectra_1690465901/gds_jades_eazy
+MAIN_OUTPUT_FILE          eazy-output/eazy_v1.1_lines.spectra_1691350224/gds_jades_eazy
 PRINT_ERRORS              y
 CHI2_SCALE                1.0
 VERBOSE_LOG               y

@@ -3,7 +3,7 @@ FILTERS_RES               FILTER.RES.latest
 FILTER_FORMAT             1.0
 SMOOTH_FILTERS            n
 SMOOTH_SIGMA              100.0
-TEMPLATES_FILE            templates/fsps_45k_0.3removed.param
+TEMPLATES_FILE            templates/br07_default.spectra.param
 TEMPLATE_COMBOS           a
 NMF_TOLERANCE             0.0001
 WAVELENGTH_FILE           templates/uvista_nmf/lambda.def
@@ -27,7 +27,7 @@ NOT_OBS_THRESHOLD         -90.0
 N_MIN_COLORS              5.0
 ARRAY_NBITS               32.0
 OUTPUT_DIRECTORY          OUTPUT
-MAIN_OUTPUT_FILE          eazy-output/fsps_45k_0.3removed_1690465901/gds_jades_eazy
+MAIN_OUTPUT_FILE          eazy-output/br07_default.spectra_1691350224/gds_jades_eazy
 PRINT_ERRORS              y
 CHI2_SCALE                1.0
 VERBOSE_LOG               y
