@@ -266,7 +266,10 @@ for t,sp in enumerate(SP):
 kwargs = {'scale_lyman_series': 0.1, 'force_recompute': True, #!! lines scaling here!! fix balmer
         'oversample': 2.5, 'zmet': 1}
 
-scale_lines = {'[OII]3726': 1., '[OII]3729': 1.}
+scale_lines_templ = {
+    '[OII]3726': 1., '[OII]3729': 1.,
+    'H alpha 6563':1., 'H beta 4861': 1., 'H gamma 4340': 1., 'H delta 4102': 1., 'H 3970': 1., 'H 3889': 1., 'H 3835': 1., 'H 3798': 1.}
+scale_lines = scale_lines_templ
 kwargs['scale_lines'] = scale_lines
 
 # Metallicity-dependent blue templates
@@ -335,11 +338,11 @@ delta_age_max = 0.01 # Maximum delta age relative to age of universe for SF
                      ])"""
 parameterSpace = [
     np.logspace(np.log10(0.01), np.log10(0.5), 3), # age
-    np.logspace(np.log10(0.005), np.log10(3), 3), # Av
-    np.logspace(np.log10(0.1), np.log10(0.5), 2), # Hb4861+OIII
-    [0,-0.3], # extra_uv
-    [-3.2], # beta
-    [0,-0.3], # dust_index
+    np.logspace(np.log10(0.005), np.log10(0.5), 2), # Av
+    np.logspace(np.log10(0.1), np.log10(0.5), 2), # Hb4861+OIII #TODO: figure out use
+    [0,-0.3], # extra_uv #TODO: figure out use
+    [-3.2], # beta #TODO: figure out use
+    [0,-0.3], # dust_index #TODO: figure out use
     list(range(4))#index of SFH
 ]#TODO: add Oxygen scaling and HII scaling
 #create grid of parameters
@@ -366,6 +369,10 @@ def worker(vars, threadID=None):
     i, props = vars
     tage_, Av, hb_boost, extra_uv, beta, dust_index, sfh_index = props
     #TODO: make sure all parameters are in use
+    #!hb_boost
+    #!extra_uv
+    #!beta
+    #!dust_index
     print(f"\n === template {i} - thread {threadID} ===")
 
     sfh_index = int(sfh_index)
