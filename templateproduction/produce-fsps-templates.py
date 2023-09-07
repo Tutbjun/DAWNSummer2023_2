@@ -268,7 +268,9 @@ kwargs = {'scale_lyman_series': 0.1, 'force_recompute': True, #!! lines scaling 
 
 scale_lines_templ = {
     '[OII]3726': 1., '[OII]3729': 1.,
-    'H alpha 6563':1., 'H beta 4861': 1., 'H gamma 4340': 1., 'H delta 4102': 1., 'H 3970': 1., 'H 3889': 1., 'H 3835': 1., 'H 3798': 1.}
+    'Halpha6563':1., 'Hbeta4861':1., 'Hgamma4340':1., 'Hdelta4102':1., 'H3970':1., 'H3889':1., 'H3835':1., 'H3798':1.,
+    '[OIII]4960': 1., '[OIII]5007': 1.
+}
 scale_lines = scale_lines_templ
 kwargs['scale_lines'] = scale_lines
 
@@ -339,8 +341,8 @@ delta_age_max = 0.01 # Maximum delta age relative to age of universe for SF
 parameterSpace = [
     np.logspace(np.log10(0.01), np.log10(0.5), 3), # age
     np.logspace(np.log10(0.005), np.log10(0.5), 2), # Av
-    np.logspace(np.log10(0.1), np.log10(0.5), 2), # Hb4861+OIII #TODO: figure out use
-    [0,-0.3], # extra_uv #TODO: figure out use
+    np.logspace(np.log10(0.01), np.log10(1), 3), # Hb4861+OIII
+    [-0.3], # extra_uv #TODO: figure out use
     [-3.2], # beta #TODO: figure out use
     [0,-0.3], # dust_index #TODO: figure out use
     list(range(4))#index of SFH
@@ -369,7 +371,6 @@ def worker(vars, threadID=None):
     i, props = vars
     tage_, Av, hb_boost, extra_uv, beta, dust_index, sfh_index = props
     #TODO: make sure all parameters are in use
-    #!hb_boost
     #!extra_uv
     #!beta
     #!dust_index
@@ -410,6 +411,14 @@ def worker(vars, threadID=None):
     #sp.scale_lines['Lyalpha1216'] = 1e3
     #sp.scale_lines['Lybeta1025'] = 11e10
     #sp.scale_lyman_series = 1e2
+
+    #=== scale emission lines ===============================
+    scale_lines = {k:scale_lines_templ[k]*hb_boost for k in scale_lines_templ if "OIII" in k or "H " in k}
+    #add rest without scaling
+    for k in scale_lines_templ:
+        if k not in scale_lines:
+            scale_lines[k] = scale_lines_templ[k]
+    kwargs['scale_lines'] = scale_lines
     
     # metallicity
     logzsol_ = 0.0
