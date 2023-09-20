@@ -164,3 +164,9 @@ catExampleErda/templatebucket/
 *.gz
 catExampleErda/astrodata/
 catExampleErda/templates/
+*.fits
+*.translate
+*.zeropoint
+*.param
+*.csv
+*.png
